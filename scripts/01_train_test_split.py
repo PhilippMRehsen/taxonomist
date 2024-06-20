@@ -71,6 +71,7 @@ if __name__ == "__main__":
         help="The random seed for the split. Default is 42",
         default=42,
     )
+    
     parser.add_argument(
         "--shuffle",
         type=lambda x: bool(strtobool(x)),
@@ -146,31 +147,30 @@ if __name__ == "__main__":
     print(out_fname)
 
     # Print information on data splits
-    if (args.verbose == 1) and is_categorical:
-        log_fname = out_folder / (out_fname.stem + "_log.txt")
-        with open(log_fname, "w") as file:
-            for f in range(args.n_splits):
-                infodf = pd.DataFrame()
-                infodf.index = df[args.target_col].unique()
+    if args.verbose == 1:
+        dfs = []
+        for f in range(args.n_splits):
+            infodf = pd.DataFrame()
+            infodf.index = df[args.target_col].unique()
 
-                def vc(f, set_):
-                    return df[df[str(f)] == set_][args.target_col].value_counts()
+            def vc(f, set_):
+                return df[df[str(f)] == set_][args.target_col].value_counts()
 
-                infodf[f"train_{str(f)}"] = vc(f, "train")
-                infodf[f"val_{str(f)}"] = vc(f, "val")
-                infodf[f"test_{str(f)}"] = vc(f, "test")
-                p = str(f"Fold {f}\n")
-                print(p)
-                file.writelines([p])
+            def uc(f, set_):
+                return df[df[str(f)] == set_].groupby(args.target_col)[args.group_col].nunique()
 
-                p = str(infodf.fillna(0).astype(int))
-                print(p)
-                file.writelines([p])
+            infodf[f"train_{str(f)}"] = vc(f, "train")
+            infodf[f"val_{str(f)}"] = vc(f, "val")
+            infodf[f"test_{str(f)}"] = vc(f, "test")
 
-                m = infodf[infodf.isna().any(axis=1)]
-                if len(m) > 0:
-                    p = f"\nMissing classes:\n{str(m.fillna(0).astype(int))}"
-                    print(p)
-                    file.writelines([p])
-                print()
-                file.write("\n\n")
+            infodf[f"train_{str(f)}_s"] = uc(f, "train")
+            infodf[f"val_{str(f)}_sp"] = uc(f, "val")
+            infodf[f"test_{str(f)}_s"] = uc(f, "test")
+
+            dfs.append(infodf)
+            dfs.append(pd.DataFrame())
+        df_all = pd.concat(dfs, axis=1)
+        df_all.index = df[args.target_col].unique()
+        print(df_all)
+        log_fname = out_folder / (out_fname.stem + "_log.csv")
+        df_all.to_csv(log_fname)
